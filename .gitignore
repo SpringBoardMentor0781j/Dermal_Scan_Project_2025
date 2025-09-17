@@ -1,0 +1,25 @@
+# Python Byte-compiled / Cache files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual Environment
+# Ignores any folder named venv, .venv, env, or .env at the project root.
+/venv/
+/.venv/
+/env/
+/.env/
+
+# Datasets
+# Ignores the main dataset folder at the project root.
+/datasets/
+
+# IDE and Editor Folders (Recommended)
+.vscode/
+.idea/
+
+# Environment Variables File (Recommended)
+# Never commit your secrets and API keys.
+.env
+
+!haarcascade_frontalface_default.xml
