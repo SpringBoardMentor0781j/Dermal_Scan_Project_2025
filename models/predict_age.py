@@ -1,152 +1,214 @@
-# Import necessary libraries
+# =================================================================================================
+# SCRIPT TO PREDICT AGE FROM IMAGES USING A TRAINED KERAS MODEL
+# This script provides functions to load a model, predict age for a single image, and
+# evaluate the model's performance on a folder of images. It is designed to run on your local computer.
+# =================================================================================================
+
+# --- 0. IMPORT NECESSARY LIBRARIES ---
+
+# 'os' is a module that provides functions for interacting with the operating system.
+# We use it here to check if file and directory paths are valid.
 import os
+# 'numpy' is a fundamental package for numerical operations in Python.
+# We use it for shuffling the list of images and for numerical calculations.
 import numpy as np
+# 'tensorflow' is the core deep learning library we will use.
 import tensorflow as tf
+# 'load_model' is the specific function from Keras (part of TensorFlow) to load a saved model file.
 from tensorflow.keras.models import load_model
 
-# --- 1. Model Loader ---
-def load_age_model(model_path="age_predictor_utkface.h5"):
+# --- 1. MODEL LOADER FUNCTION ---
+
+def load_age_model(model_path):
     """
-    Load and return the trained age prediction model.
-    Args:
-        model_path: path to the saved Keras .h5 model
+    Loads and returns the trained age prediction model from a .h5 file.
+
+    This function is responsible for loading the saved Keras model. It includes a critical fix
+    ('compile=False') to prevent errors caused by version mismatches between the training
+    and prediction environments.
+
+    Parameters:
+        model_path (str): This is the full path to the saved Keras .h5 model file.
+
     Returns:
-        Keras model
+        tf.keras.Model: The loaded Keras model, ready for making predictions.
     """
-    # Check if the model file exists before trying to load it.
+    # This line checks if the file at the specified path actually exists.
     if not os.path.exists(model_path):
-        # Raise an error if the file is not found.
+        # If the file is not found, a FileNotFoundError is raised with a helpful message, and the script stops.
         raise FileNotFoundError(f"Model file not found: {model_path}")
+    
+    # This print statement provides feedback to the user that the loading process is starting.
     print(f"Loading model from: {model_path}")
-    # Load the pre-trained Keras model from the specified file path.
-    model = load_model(model_path)
+    # This is the core line for loading the model.
+    # 'compile=False' is the crucial fix: it tells Keras to only load the model's architecture
+    # and its learned weights, but to ignore the optimizer state and loss function configuration.
+    # This prevents the deserialization error you were seeing.
+    model = load_model(model_path, compile=False)
+    # This print statement confirms that the model was loaded successfully.
     print("Model loaded successfully.")
-    # Return the loaded model object.
+    # The function returns the loaded model object.
     return model
 
-# --- 2. Stable Single Image Prediction Function ---
+# --- 2. SINGLE IMAGE PREDICTION FUNCTION ---
+
 def predict_age(model, image_path):
     """
-    Predicts the age from a single, pre-sized (224x224) image file.
-    Args:
-        model (tf.keras.Model): The pre-loaded Keras model.
-        image_path (str): The file path to the image.
+    Predicts the age from a single image file, assuming the image is already sized correctly (e.g., 224x224).
+
+    This function handles the entire prediction pipeline for one image: reading, preprocessing,
+    predicting, and post-processing the result.
+
+    Parameters:
+        model (tf.keras.Model): The pre-loaded Keras model object returned by `load_age_model`.
+        image_path (str): The full path to the image file for which you want to predict the age.
+
     Returns:
-        float or None: The predicted age, or None if the file doesn't exist.
+        float or None: The predicted age as a floating-point number, or None if the image file is not found.
     """
-    # Check if the image file exists at the given path.
+    # This line checks if the image file exists at the given path.
     if not os.path.exists(image_path):
+        # If the file is missing, an error is printed, and the function returns None.
         print(f"Error: Image file not found at {image_path}")
         return None
 
-    # Use TensorFlow's I/O functions to read the image file.
+    # 'tf.io.read_file' reads the entire content of the file into a raw bytes tensor.
     img = tf.io.read_file(image_path)
-    # Decode the image file into a tensor with 3 color channels (RGB).
+    # 'tf.image.decode_jpeg' decodes the raw image data into a proper image tensor with 3 color channels (RGB).
     img = tf.image.decode_jpeg(img, channels=3)
     
-    # The resizing step is now removed, assuming input is already 224x224.
+    # NOTE: This function assumes the image is already correctly sized (e.g., 224x224), so a resizing step is skipped.
     
-    # Normalize pixel values from the [0, 255] range to the [0.0, 1.0] range.
+    # 'tf.cast' changes the data type of the image tensor to float32, which is required for calculations.
+    # We then divide by 255.0 to normalize the pixel values from the [0, 255] range to the [0, 1] range.
     img = tf.cast(img, tf.float32) / 255.0
-    # Add a batch dimension to the tensor; model expects input shape (1, 224, 224, 3).
+    # The model expects a "batch" of images as input, even for a single prediction.
+    # 'tf.expand_dims' adds a new dimension at the beginning (axis=0), changing the shape from (H, W, C) to (1, H, W, C).
     img_batch = tf.expand_dims(img, axis=0)
     
-    # Use the model to predict the age from the preprocessed image batch.
+    # 'model.predict' runs the model on the input image batch and returns the prediction(s). 'verbose=0' keeps the output clean.
     prediction = model.predict(img_batch, verbose=0)
-    # The prediction is a nested array (e.g., [[35.4]]), so extract the single value.
+    # The prediction is often returned in a nested array (e.g., [[25.5]]). 'flatten()[0]' extracts the single numerical value.
     predicted_age = prediction.flatten()[0]
     
-    # Ensure the predicted age is not negative by clamping it at 0.
+    # This is a safety check to ensure the model doesn't output a nonsensical negative age.
+    # 'max(0, ...)' will return 0 if the prediction is negative, otherwise it returns the prediction itself.
     predicted_age = max(0, predicted_age)
     
-    # Return the final predicted age.
+    # The final, processed prediction is returned by the function.
     return predicted_age
 
-# --- 3. Batch Folder Evaluation Function ---
+# --- 3. BATCH FOLDER EVALUATION FUNCTION ---
+
 def predict_folder(model, folder_path, num_images=200, batch_size=64):
     """
-    Predict ages for a batch of images in a folder and calculate the Mean Absolute Error.
-    Args:
-        model: pre-loaded Keras model
-        folder_path: path to folder containing images
-        num_images: number of random images to test
-        batch_size: batch size for prediction
+    Predicts ages for a random batch of images from a folder and calculates the Mean Absolute Error (MAE).
+
+    This function is for evaluating the model's performance. It efficiently processes multiple images
+    using a tf.data.Dataset pipeline and compares the predictions to the true ages parsed from the filenames.
+
+    Parameters:
+        model (tf.keras.Model): The pre-loaded Keras model.
+        folder_path (str): The path to the directory containing the test images.
+        num_images (int): The number of random images to select from the folder for the test.
+        batch_size (int): The number of images to process at once during prediction, for efficiency.
     """
-    # Check if the provided folder path is a valid directory.
+    # This line checks if the provided path is a valid directory.
     if not os.path.isdir(folder_path):
+        # If not, an error is raised, and the script stops.
         raise NotADirectoryError(f"Image directory not found: {folder_path}")
 
-    # Get a list of all files in the directory.
+    # 'os.listdir' gets a list of all filenames in the directory.
     all_images = os.listdir(folder_path)
-    # Shuffle the list of images to get a random sample.
+    # 'np.random.shuffle' randomizes the order of the list in place.
     np.random.shuffle(all_images)
-    # Select a subset of images to test.
+    # This line selects a subset of the shuffled images, ensuring we don't try to select more images than exist.
     selected = all_images[:min(num_images, len(all_images))]
-    # Create the full file paths for the selected images.
+    # This line creates a list of full, absolute paths for each selected image filename.
     selected_paths = [os.path.join(folder_path, f) for f in selected]
 
-    # Define a helper function to load and preprocess images for the dataset pipeline.
+    # This is a small helper function defined inside `predict_folder` to keep the code organized.
     def load_and_preprocess(path):
-        img = tf.io.read_file(path) # Read the image file.
-        img = tf.image.decode_jpeg(img, channels=3) # Decode as a 3-channel image.
-        
-        # Resizing step is removed here as well.
-        
-        img = tf.cast(img, tf.float32) / 255.0 # Normalize pixel values.
+        # It reads the raw image file.
+        img = tf.io.read_file(path)
+        # It decodes the image into a 3-channel tensor.
+        img = tf.image.decode_jpeg(img, channels=3)
+        # It normalizes the pixel values to the [0, 1] range.
+        img = tf.cast(img, tf.float32) / 255.0
+        # It returns the preprocessed image tensor.
         return img
 
-    # Create a TensorFlow Dataset from the list of file paths for efficient processing.
+    # 'tf.data.Dataset.from_tensor_slices' creates a TensorFlow Dataset from the list of file paths.
     ds = tf.data.Dataset.from_tensor_slices(selected_paths)
-    # Apply the preprocessing function to each image in parallel.
+    # '.map' applies our 'load_and_preprocess' function to each file path in the dataset.
+    # 'num_parallel_calls' allows TensorFlow to process multiple images in parallel for better performance.
     ds = ds.map(load_and_preprocess, num_parallel_calls=tf.data.AUTOTUNE)
-    # Group the images into batches.
+    # '.batch' groups the images into batches of the specified size.
     ds = ds.batch(batch_size)
-    # Prefetch data to improve performance by overlapping data preparation and model execution.
+    # '.prefetch' is a performance optimization that prepares the next batch of data while the current one is being processed.
     ds = ds.prefetch(tf.data.AUTOTUNE)
 
-    # Get predictions for the entire dataset.
+    # 'model.predict' runs the model on the entire dataset and returns all predictions as a single NumPy array.
     preds = model.predict(ds, verbose=0).flatten()
-    # Clamp any negative predictions to 0.
+    # 'np.maximum' is a fast way to apply the "no negative age" rule to the entire array of predictions at once.
     preds = np.maximum(preds, 0)
 
-    # Calculate the error for each prediction.
+    # We initialize an empty list to store the absolute error for each prediction.
     errors = []
+    # We loop through both the list of image paths and the corresponding predictions at the same time.
     for path, pred in zip(selected_paths, preds):
-        fname = os.path.basename(path) # Get the filename from the path.
+        # 'os.path.basename' gets just the filename from the full path.
+        fname = os.path.basename(path)
+        # This 'try...except' block handles cases where a filename might not be in the correct format.
         try:
-            # The actual age is encoded in the filename (e.g., "35_...jpg").
+            # The actual age is parsed from the first part of the filename (e.g., '35_...').
             actual = int(fname.split("_")[0])
-            error = abs(pred - actual) # Calculate the absolute error.
+            # The absolute error is the difference between the prediction and the actual age.
+            error = abs(pred - actual)
+            # We add this error to our list.
             errors.append(error)
-            print(f"{fname}: Actual={actual}, Predicted={pred:.1f}, Error={error:.1f}")
+            # A print statement provides real-time feedback on each image.
+            print(f"{fname}: actual={actual}, predicted={pred:.1f}, error={error:.1f}")
         except Exception:
+            # If the age can't be parsed, a message is printed, and the file is skipped.
             print(f"{fname}: Could not parse actual age from filename.")
 
-    # Print the final evaluation summary.
+    # This condition checks if we were able to make any valid predictions.
     if errors:
+        # If so, a final summary report is printed.
         print("\n---------------------------------")
-        print(f"Test complete on {len(errors)} images")
-        print(f"Mean Absolute Error: {np.mean(errors):.2f} years") # Calculate and print the average error.
+        print(f"Test complete on {len(errors)} images.")
+        # 'np.mean(errors)' calculates the Mean Absolute Error from our list of individual errors.
+        print(f"Mean Absolute Error: {np.mean(errors):.2f} years")
         print("---------------------------------")
     else:
+        # If no valid predictions could be compared, this message is shown.
         print("No valid predictions were made.")
 
-# --- Example Usage ---
-if __name__ == "__main__":
-    # Load the model from the .h5 file.
-    model = load_age_model("age_predictor_utkface.h5")
+# --- 4. EXAMPLE USAGE BLOCK ---
 
-    # --- DEMONSTRATE THE STABLE `predict_age` FUNCTION ---
-    # IMPORTANT: Change this to the path of a single image for testing.
+# This 'if' block ensures that the code inside it only runs when the script is executed directly
+# (e.g., by running 'python predict_age.py' in the terminal).
+if __name__ == "__main__":
+    # This line calls our model loading function with the path to your saved model file.
+    # The 'r' before the string makes it a "raw" string, which helps avoid issues with backslashes in Windows file paths.
+    model = load_age_model(r"D:\Projects\skin-age-detection\models\age_mobilenet_regression_stratified.h5")
+
+    # --- Test on a single image ---
+    # This line defines the path to a single image you want to test.
     single_image_test_path = r"D:\Projects\skin-age-detection\datasets\UTKFace_resized\88_0_0_20170111210626829.jpg.chip.jpg"
+    # A print statement to clearly mark this section of the output.
     print("\n--- Testing on a single image ---")
-    predicted_age = predict_age(model, single_image_test_path) # Call the single prediction function.
+    # This line calls our single image prediction function.
+    predicted_age = predict_age(model, single_image_test_path)
+    # This condition checks if the prediction was successful (i.e., not None).
     if predicted_age is not None:
-        print(f"✅ The predicted age for the single image is: {predicted_age:.1f} years\n")
-r'''
-    # --- DEMONSTRATE THE `predict_folder` BATCH EVALUATION ---
-    # This runs the batch prediction and calculates the error.
+        # If successful, the predicted age is printed, formatted to one decimal place.
+        print(f"Predicted age for single image is: {predicted_age:.1f} years\n")
+
+    # --- Run batch evaluation on a folder ---
+    # A print statement to mark this section of the output.
     print("--- Running batch evaluation on folder ---")
+    # This line calls our batch evaluation function, pointing it to the directory containing your test images.
     predict_folder(model, r"D:\Projects\skin-age-detection\datasets\UTKFace_resized")
 
-    '''

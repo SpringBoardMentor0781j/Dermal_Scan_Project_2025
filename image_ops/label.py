@@ -1,100 +1,128 @@
-# Import the necessary libraries
-import cv2        # OpenCV for computer vision tasks
-import numpy as np  # NumPy for numerical operations
+# import necessary libraries
+import cv2        # opencv for computer vision tasks
+import numpy as np  # numpy for numerical operations
+import os
+# --- the custom loader function ---
 
-# --- NEW: Import the custom loader function ---
-# This line imports the 'load_cascade' function from your 'loader.py' file.
-from loader import load_cascade
+
+def load_cascade(cascade_filename="haarcascade_frontalface_default.xml"):
+    """
+    Loads a Haar Cascade classifier from a file.
+
+    Args:
+        cascade_filename (str): The name of the cascade XML file. It's assumed
+                                to be in the same directory as this script.
+
+    Returns:
+        cv2.CascadeClassifier or None: The loaded classifier object if successful,
+                                       otherwise None.
+    """
+    # 1. Create a robust, absolute path to the cascade file.
+    # This joins the directory of the current script with the filename,
+    # ensuring the file is found regardless of where the script is run from.
+    cascade_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), cascade_filename)
+
+    # 2. Check if the cascade file actually exists at the constructed path.
+    if not os.path.exists(cascade_path):
+        # If the file is not found, print a clear error message.
+        print(f"FATAL ERROR: Cascade file not found at '{cascade_path}'")
+        # Return None to indicate that the loading failed.
+        return None
+
+    # 3. Load the classifier from the file path.
+    cascade_classifier = cv2.CascadeClassifier(cascade_path)
+
+    # 4. Check if the classifier was loaded correctly (i.e., it's not empty).
+    # A corrupted file might exist but fail to load into a valid classifier.
+    if cascade_classifier.empty():
+        # If loading resulted in an empty object, print an error.
+        print(f"FATAL ERROR: Could not load cascade classifier from '{cascade_path}'. The file might be corrupt.")
+        # Return None to indicate failure.
+        return None
+
+    # 5. If all checks pass, print a success message and return the classifier object.
+    print(f"Haar Cascade classifier '{cascade_filename}' loaded successfully.")
+    return cascade_classifier
+
+
 
 def draw_labels_on_image(image_np, age, features, face_cascade):
     """
-    Pads an image, detects a face, and draws the predicted age and feature percentages.
+    pads an image, detects a face, and draws the predicted age and feature percentages
 
     Args:
-        image_np (numpy.ndarray): The input image as a NumPy array (in BGR format).
-        age (float): The predicted age of the person.
-        features (dict): A dictionary of feature names (str) and their probabilities (float).
-        face_cascade (cv2.CascadeClassifier): The pre-loaded Haar Cascade classifier object.
+        image_np (numpy.ndarray): input image as numpy array (bgr format)
+        age (float): predicted age
+        features (dict): feature names (str) -> probabilities (float)
+        face_cascade (cv2.CascadeClassifier): preloaded haar cascade
 
     Returns:
-        numpy.ndarray: The padded image with the annotations drawn on it.
+        numpy.ndarray: padded image with annotations
     """
-    # --- 1. Add Padding to the Image ---
-    # Define the size of the border to add around the image.
-    top_pad = 70      # Space above for the age text.
-    bottom_pad = 150  # Space below for the list of features.
-    left_pad = 50     # Aesthetic space on the sides.
-    right_pad = 50    # Aesthetic space on the sides.
-    border_color = [0, 0, 0] # The color of the border (black).
+    # --- 1. add padding to image ---
+    top_pad, bottom_pad, left_pad, right_pad = 70, 150, 50, 50
+    border_color = [0,0,0] # black
 
-    # Use OpenCV's copyMakeBorder function to create a new, larger image with the padding.
-    output_image = cv2.copyMakeBorder(image_np, top_pad, bottom_pad, left_pad, right_pad, 
+    output_image = cv2.copyMakeBorder(image_np, top_pad, bottom_pad, left_pad, right_pad,
                                       cv2.BORDER_CONSTANT, value=border_color)
 
-    # 2. Convert the padded color image to grayscale for the detection algorithm.
+    # 2. convert to grayscale for detection
     gray_image = cv2.cvtColor(output_image, cv2.COLOR_BGR2GRAY)
 
-    # 3. Perform face detection on the new, padded grayscale image.
-    # The (x, y) coordinates will be relative to this new, larger canvas.
+    # 3. detect faces
     faces = face_cascade.detectMultiScale(gray_image, scaleFactor=1.1, minNeighbors=5)
 
-    # 4. If no faces are found, return the padded image without annotations.
+    # 4. no faces found
     if len(faces) == 0:
-        print("DEBUG: No face was detected in the image.")
+        print("DEBUG: no face detected in image")
         return output_image
 
-    # 5. Process the first face detected.
+    # 5. process first face detected
     x, y, w, h = faces[0]
 
-    # --- Draw Annotations on the Padded Image ---
+    # --- fix offset: adjust coords by padding ---
+    x -= left_pad
+    y -= top_pad
+    x = max(0, x); y = max(0, y)  # make sure coords don't go negative
+
+    # --- draw annotations ---
     font = cv2.FONT_HERSHEY_SIMPLEX
-    age_color = (255, 255, 255); feature_color = (0, 255, 0); box_color = (255, 0, 0)
-    font_scale = 0.6; thickness = 2
+    age_color, feature_color, box_color = (255,255,255), (0,255,0), (255,0,0)
+    font_scale, thickness = 0.6, 2
 
-    # 6. Draw a bounding box around the detected face.
-    cv2.rectangle(output_image, (x, y), (x+w, y+h), box_color, thickness)
+    # 6. draw bounding box (adjusted for padding)
+    cv2.rectangle(output_image, (x+left_pad, y+top_pad), (x+w+left_pad, y+h+top_pad), box_color, thickness)
 
-    # 7. Draw the predicted age above the bounding box.
-    # Because we padded the image, there is now guaranteed space at (y - 10).
+    # 7. draw age text above box
     age_text = f"Age: {age:.1f} years"
-    cv2.putText(output_image, age_text, (x, y - 10), font, font_scale, age_color, thickness)
+    cv2.putText(output_image, age_text, (x+left_pad, y+top_pad - 10), font, font_scale, age_color, thickness)
 
-    # 8. Draw the feature percentages below the bounding box.
-    # There is also guaranteed space for this list now.
-    start_y_features = y + h + 25
+    # 8. draw feature percentages below box
+    start_y_features = y + h + top_pad + 25
     for i, (feature_name, probability) in enumerate(features.items()):
-        feature_text = f"- {feature_name}: {probability * 100:.1f}%"
-        current_y = start_y_features + (i * 25)
-        cv2.putText(output_image, feature_text, (x, current_y), font, font_scale, feature_color, 1)
+        feature_text = f"- {feature_name}: {probability*100:.1f}%"
+        current_y = start_y_features + (i*25)
+        cv2.putText(output_image, feature_text, (x+left_pad, current_y), font, font_scale, feature_color, 1)
 
-    # 9. Return the final padded and annotated image.
+    # 9. return final image
     return output_image
 
-# --- Example Usage Block (for testing the script directly) ---
+# --- example usage ---
 if __name__ == '__main__':
-    # Define the path to a test image on your computer.
-    test_image_path = r'D:\Projects\skin-age-detection\datasets\UTKFace_resized\40_0_1_20170113184933016.jpg.chip.jpg'
-    
-    # Use the loader module to get the classifier.
+    test_image_path = r'D:\Projects\skin-age-detection\datasets\UTKFace_10k_balanced\90_1_2_20170111221639268.jpg.chip.jpg'
     cascade_classifier = load_cascade()
-    
+
     if cascade_classifier is not None:
-        # Create dummy prediction data.
         dummy_age = 38.4
         dummy_features = {"Wrinkles": 0.87, "Puffy Eyes": 0.62, "Dark Spots": 0.25}
-        
-        # Read the test image.
+
         image = cv2.imread(test_image_path)
-        
         if image is not None:
-            # Pass the original image to the function. It will handle the padding.
             labeled_image = draw_labels_on_image(image, dummy_age, dummy_features, cascade_classifier)
-            
-            # Display the final image.
             cv2.imshow("Labeled Output with Padding", labeled_image)
             cv2.waitKey(0)
             cv2.destroyAllWindows()
         else:
-            print(f"Error: Could not read the image from '{test_image_path}'.")
+            print(f"error: could not read image from '{test_image_path}'")
     else:
-        print("Could not run labeling because the cascade classifier failed to load.")
+        print("could not run labeling because cascade classifier failed to load")
