@@ -1,0 +1,2 @@
+age best model.h5 is old one with mae ~10.5
+age_mobilenet_regression_stratified is a model with ~7 years mae
