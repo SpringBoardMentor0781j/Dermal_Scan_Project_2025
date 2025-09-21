@@ -196,7 +196,7 @@ if __name__ == "__main__":
 
     # --- Test on a single image ---
     # This line defines the path to a single image you want to test.
-    single_image_test_path = r"D:\Projects\skin-age-detection\datasets\UTKFace_resized\88_0_0_20170111210626829.jpg.chip.jpg"
+    single_image_test_path = r"C:\Users\Hi\Pictures\Camera Roll\WIN_20250920_20_30_10_Pro.jpg"
     # A print statement to clearly mark this section of the output.
     print("\n--- Testing on a single image ---")
     # This line calls our single image prediction function.
