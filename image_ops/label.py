@@ -36,7 +36,7 @@ def load_models():
     print("Models loaded successfully (inference only).")
     return age_model, features_model
 
-
+ 
 # ==============================
 # Predict Age and Features
 # ==============================
@@ -104,7 +104,7 @@ def draw_labels_on_image(image_np, age, features, face_cascade):
 # Main
 # ==============================
 if __name__ == '__main__':
-    test_image_path = r"C:\Users\Hi\Pictures\Camera Roll\WIN_20250920_20_48_26_Pro.jpg"
+    test_image_path = r"C:\Users\Hi\Downloads\WhatsApp Image 2025-09-22 at 3.07.08 PM.jpeg"
     cascade_classifier = load_cascade()
 
     if cascade_classifier is not None:
