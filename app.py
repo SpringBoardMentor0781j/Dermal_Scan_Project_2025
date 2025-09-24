@@ -1,5 +1,6 @@
 import streamlit as st
-
+import cv2
+import numpy as np
 import os
 st.write('''
 # Derma Scan
@@ -37,7 +38,7 @@ st.write("Models loaded successfully!")
 
 st.markdown('### Upload your image here ensure proper lighting and no wearables(earrings, glasses, etc) for more accurate predictions!')
 file = st.file_uploader('upload the image file: supported formats png jpeg jpg')
-
+processed_face,predicted_age, features=(None,0,0)
 with st.spinner('processing your image'):
     if not file:
         st.write("ERROR: Test image not found")
@@ -45,5 +46,6 @@ with st.spinner('processing your image'):
         image_bytes = file.getvalue()
         processed_face = preprocess.preprocess_image(image_bytes)
     if processed_face is not None:
-        label.labeled_image
-
+        predicted_age, features= label.predict_age_and_features(processed_face, age_model, feature_model, feature_names := ["Wrinkles", "Puffy Eyes", "Dark Spots"])
+labeled_image=label.draw_labels_on_image(arr:=cv2.imdecode(np.frombuffer(image_bytes, np.uint8), cv2.IMREAD_COLOR), predict_age, features, cascade)
+st.image(labeled_image)

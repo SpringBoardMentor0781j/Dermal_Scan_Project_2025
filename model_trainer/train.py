@@ -1,127 +1,113 @@
-import os, random, shutil
+import os, random, shutil, zipfile
 import numpy as np
-import matplotlib.pyplot as plt
 import tensorflow as tf
-from tensorflow.keras.models import Model
+from tensorflow.keras.applications import EfficientNetB0
+from tensorflow.keras.applications.efficientnet import preprocess_input
 from tensorflow.keras.layers import GlobalAveragePooling2D, Dense, Dropout
+from tensorflow.keras.models import Model
 from tensorflow.keras.optimizers import Adam
-from tensorflow.keras.preprocessing.image import load_img, img_to_array
-from tensorflow.keras.utils import to_categorical
-from sklearn.model_selection import train_test_split
-from sklearn.utils.class_weight import compute_class_weight
-from tensorflow.keras.applications import MobileNet
+from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau
+import cv2
 
 # --- Parameters ---
-DATASET_DIR = r'dataset_final'
+DATASET_DIR = "/content/dataset_final"
+WORK_DIR = "/content/dataset_capped"
+DESIRED_CLASSES = ['clear_face', 'darkspots', 'puffy_eyes', 'wrinkles']
+MAX_PER_CLASS = 1000
 IMG_SIZE = (224,224)
 BATCH_SIZE = 16
-MAX_IMAGES_PER_CLASS = 150
-DESIRED_CLASSES = ['clear_face', 'darkspots', 'puffy_eyes', 'wrinkles']
+EPOCHS = 20
 
-# --- Clean dataset ---
-for folder in os.listdir(DATASET_DIR):
-    path = os.path.join(DATASET_DIR, folder)
-    if folder not in DESIRED_CLASSES:
-        if os.path.isdir(path):
-            shutil.rmtree(path)
-        else:
-            os.remove(path)
+os.makedirs(WORK_DIR, exist_ok=True)
 
-# --- Load images ---
-images, labels = [], []
-for idx, category in enumerate(DESIRED_CLASSES):
-    category_path = os.path.join(DATASET_DIR, category)
-    img_files = [f for f in os.listdir(category_path) if f.lower().endswith(('jpg','jpeg','png'))]
-    if len(img_files) > MAX_IMAGES_PER_CLASS:
-        img_files = random.sample(img_files, MAX_IMAGES_PER_CLASS)
-    for img_file in img_files:
-        img_path = os.path.join(category_path, img_file)
-        img = load_img(img_path, target_size=IMG_SIZE)
-        img_array = img_to_array(img)/255.0
-        images.append(img_array)
-        labels.append(idx)
+# --- Step 1: Build class -> file path dictionary, cap at MAX_PER_CLASS ---
+class_dict = {}
+for cls in DESIRED_CLASSES:
+    src_dir = os.path.join(DATASET_DIR, cls)
+    imgs = [os.path.join(src_dir,f) for f in os.listdir(src_dir) if f.lower().endswith(("jpg","jpeg","png"))]
+    random.shuffle(imgs)
+    selected = imgs[:MAX_PER_CLASS]
 
-images = np.array(images, dtype=np.float32)
-labels = np.array(labels)
-num_classes = len(DESIRED_CLASSES)
+    dst_dir = os.path.join(WORK_DIR, cls)
+    os.makedirs(dst_dir, exist_ok=True)
+    class_dict[cls] = []
 
-# --- Train/Val/Test split ---
-X_train, X_temp, y_train, y_temp = train_test_split(images, labels, test_size=0.3, stratify=labels, random_state=42)
-X_val, X_test, y_val, y_test = train_test_split(X_temp, y_temp, test_size=0.5, stratify=y_temp, random_state=42)
+    for f in selected:
+        shutil.copy(f, dst_dir)
+        class_dict[cls].append(os.path.join(dst_dir, os.path.basename(f)))
 
-y_train_cat = to_categorical(y_train, num_classes)
-y_val_cat = to_categorical(y_val, num_classes)
-y_test_cat = to_categorical(y_test, num_classes)
+# --- Step 2: Split 80:20 per class ---
+train_paths, val_paths, train_labels, val_labels = [], [], [], []
 
-# --- Class weights ---
-class_weights_array = compute_class_weight('balanced', classes=np.unique(y_train), y=y_train)
-class_weights = dict(enumerate(class_weights_array))
-print("Class weights:", class_weights)
+for idx, cls in enumerate(DESIRED_CLASSES):
+    imgs = class_dict[cls]
+    split_idx = int(len(imgs)*0.8)
+    train_imgs = imgs[:split_idx]
+    val_imgs = imgs[split_idx:]
 
-# --- Build MobileNet backbone + EfficientNet-style head ---
+    train_paths.extend(train_imgs)
+    train_labels.extend([idx]*len(train_imgs))
+    val_paths.extend(val_imgs)
+    val_labels.extend([idx]*len(val_imgs))
+
+# --- Step 3: Shuffle combined train and val lists ---
+train_combined = list(zip(train_paths, train_labels))
+val_combined = list(zip(val_paths, val_labels))
+random.shuffle(train_combined)
+random.shuffle(val_combined)
+train_paths, train_labels = zip(*train_combined)
+val_paths, val_labels = zip(*val_combined)
+
+# --- Step 4: Generator for on-the-fly loading ---
+def data_generator(paths, labels, batch_size=BATCH_SIZE):
+    n = len(paths)
+    while True:
+        for i in range(0, n, batch_size):
+            batch_paths = paths[i:i+batch_size]
+            batch_labels = labels[i:i+batch_size]
+            X, y = [], []
+            for p,l in zip(batch_paths, batch_labels):
+                img = cv2.imread(p)
+                img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+                img = cv2.resize(img, IMG_SIZE)
+                img = preprocess_input(img.astype(np.float32))
+                X.append(img)
+                y.append(l)
+            yield np.array(X), tf.keras.utils.to_categorical(y, num_classes=len(DESIRED_CLASSES))
+
+train_gen = data_generator(train_paths, train_labels)
+val_gen = data_generator(val_paths, val_labels)
+steps_per_epoch = len(train_paths)//BATCH_SIZE
+val_steps = len(val_paths)//BATCH_SIZE
+
+# --- Step 5: Build and compile model ---
 def build_model(num_classes):
-    backbone = MobileNet(weights='imagenet', include_top=False, input_shape=(224,224,3))
-    backbone.trainable = True  # can fine-tune later if needed
+    backbone = EfficientNetB0(weights="imagenet", include_top=False, input_shape=(224,224,3))
+    backbone.trainable = False  # freeze initially
     x = backbone.output
     x = GlobalAveragePooling2D()(x)
     x = Dense(256, activation='relu')(x)
     x = Dropout(0.5)(x)
-    predictions = Dense(num_classes, activation='softmax')(x)
-    model = Model(inputs=backbone.input, outputs=predictions)
-    return model
+    preds = Dense(num_classes, activation='softmax')(x)
+    return Model(inputs=backbone.input, outputs=preds)
 
-# --- Compile & train ---
-def train_model(model, epochs=20, batch_size=BATCH_SIZE):
-    model.compile(optimizer=Adam(1e-3),
-                  loss='categorical_crossentropy',
-                  metrics=['accuracy'])
+model = build_model(len(DESIRED_CLASSES))
+model.compile(optimizer=Adam(1e-3), loss="categorical_crossentropy", metrics=["accuracy"])
 
-    history = model.fit(
-        X_train, y_train_cat,
-        validation_data=(X_val, y_val_cat),
-        epochs=epochs,
-        batch_size=batch_size,
-        class_weight=class_weights,
-        shuffle=True
-    )
+# --- Callbacks ---
+early_stop = EarlyStopping(monitor='val_loss', patience=3, restore_best_weights=True)
+reduce_lr = ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=2)
 
-    model.save('mobilenet_effnet_head.keras')
-    model.save('mobilenet_effnet_head.h5')
-    print("Model saved as '.keras' and '.h5'")
-    return model, history
+# --- Step 6: Train ---
+history = model.fit(
+    train_gen,
+    validation_data=val_gen,
+    steps_per_epoch=steps_per_epoch,
+    validation_steps=val_steps,
+    epochs=EPOCHS,
+    callbacks=[early_stop, reduce_lr]
+)
 
-# --- Evaluate and visualize predictions ---
-def evaluate_and_show(model):
-    preds = model.predict(X_test)
-    pred_labels = np.argmax(preds, axis=1)
-    test_acc = np.mean(pred_labels == y_test)
-    print(f"\nTest accuracy: {test_acc*100:.2f}%")
-
-    plt.figure(figsize=(12,8))
-    for idx, category in enumerate(DESIRED_CLASSES,1):
-        category_path = os.path.join(DATASET_DIR, category)
-        img_files = [f for f in os.listdir(category_path) if f.lower().endswith(('jpg','jpeg','png'))]
-        if not img_files: continue
-        chosen_img = random.choice(img_files)
-        img_path = os.path.join(category_path, chosen_img)
-        img = load_img(img_path, target_size=IMG_SIZE)
-        img_array = img_to_array(img)/255.0
-        img_array = np.expand_dims(img_array, axis=0)
-
-        pred = model.predict(img_array, verbose=0)
-        predicted_class = np.argmax(pred, axis=1)[0]
-        confidence = np.max(pred)
-        predicted_label = DESIRED_CLASSES[predicted_class]
-
-        plt.subplot(1, len(DESIRED_CLASSES), idx)
-        plt.imshow(img)
-        plt.axis('off')
-        plt.title(f"True: {category}\nPred: {predicted_label} ({confidence:.2f})")
-    plt.tight_layout()
-    plt.show()
-
-# --- Main ---
-if __name__ == '__main__':
-    model = build_model(num_classes)
-    model, history = train_model(model, epochs=20, batch_size=BATCH_SIZE)
-    evaluate_and_show(model)
+# --- Step 7: Save model strictly as .h5 ---
+model.save("efficientnet_b0_face.h5")
+print("Model saved as efficientnet_b0_face.h5")

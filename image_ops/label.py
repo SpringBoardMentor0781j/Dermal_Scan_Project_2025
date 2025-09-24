@@ -2,7 +2,7 @@ import cv2
 import numpy as np
 import os
 from tensorflow.keras.models import load_model
-
+from models import predict_age
 # ==============================
 # Load Haar Cascade
 # ==============================
@@ -26,7 +26,7 @@ def load_cascade(cascade_filename="haarcascade_frontalface_default.xml"):
 # ==============================
 def load_models():
     age_model = load_model(
-        r"D:\Projects\skin-age-detection\models\age_mobilenet_regression_stratified.h5",
+        r"D:\Projects\skin-age-detection\models\age_mobilenet_regression_stratified_old.h5",
         compile=False
     )
     features_model = load_model(
@@ -123,7 +123,7 @@ if __name__ == '__main__':
                 predicted_age, predicted_features = predict_age_and_features(
                     face_crop, age_model, features_model, feature_names
                 )
-
+                predicted_age= predict_age.predict_age
                 labeled_image = draw_labels_on_image(image, predicted_age, predicted_features, cascade_classifier)
                 cv2.imshow("Labeled Output with Padding", labeled_image)
                 cv2.waitKey(0)

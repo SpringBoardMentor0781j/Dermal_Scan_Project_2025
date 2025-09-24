@@ -1,24 +1,64 @@
+# models/predict_age.py
 import os
 import numpy as np
 import tensorflow as tf
-from model_loader import load_keras_model
+import cv2
+
+# Root paths relative to the project (optional, for default paths)
+ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+MODELS_DIR = os.path.join(ROOT_DIR, "models")
+DATASETS_DIR = os.path.join(ROOT_DIR, "datasets")
 
 
+def load_model(model_path=None):
+    """Load a Keras model from a given path."""
+    if model_path is None:
+        model_path = os.path.join(MODELS_DIR, "age_mobilenet_regression_stratified_old.h5")
+    if not os.path.exists(model_path):
+        raise FileNotFoundError(f"Model file not found: {model_path}")
+    model = tf.keras.models.load_model(model_path)
+    print(f"Model loaded from {model_path}")
+    return model
 
-def predict_age(model, image_path):
-    """Predict the age from a single image file."""
-    if not os.path.exists(image_path):
-        print(f"Error: Image file not found at {image_path}")
-        return None
 
-    img = tf.io.read_file(image_path)
-    img = tf.image.decode_jpeg(img, channels=3)
+def preprocess_input(input_data):
+    """
+    Convert input to proper 3-channel RGB tensor.
+    Accepts:
+        - file path (str)
+        - numpy array (H,W,3) or grayscale (H,W)
+        - bytes (from Streamlit upload)
+    Returns: tensor ready for model.predict
+    """
+    if isinstance(input_data, str):
+        img = tf.io.read_file(input_data)
+        img = tf.image.decode_jpeg(img, channels=3)
+    elif isinstance(input_data, bytes):
+        arr = np.frombuffer(input_data, np.uint8)
+        img = cv2.imdecode(arr, cv2.IMREAD_COLOR)
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        img = tf.convert_to_tensor(img, dtype=tf.float32)
+    elif isinstance(input_data, np.ndarray):
+        if input_data.ndim == 2:  # grayscale
+            img = cv2.cvtColor(input_data, cv2.COLOR_GRAY2RGB)
+        elif input_data.shape[2] == 4:  # RGBA
+            img = cv2.cvtColor(input_data, cv2.COLOR_RGBA2RGB)
+        else:
+            img = input_data
+        img = tf.convert_to_tensor(img, dtype=tf.float32)
+    else:
+        raise TypeError("Unsupported input type. Must be path, bytes, or np.ndarray.")
+
     img = tf.cast(img, tf.float32) / 255.0
-    img_batch = tf.expand_dims(img, axis=0)
+    img = tf.expand_dims(img, axis=0)  # batch dimension
+    return img
 
-    prediction = model.predict(img_batch, verbose=0)
-    predicted_age = max(0, prediction.flatten()[0])
-    return predicted_age
+
+def predict_age(model, input_data):
+    """Predict age from a file path, numpy array, or image bytes."""
+    img_tensor = preprocess_input(input_data)
+    prediction = model.predict(img_tensor, verbose=0)
+    return max(0, prediction.flatten()[0])
 
 
 def predict_folder(model, folder_path, num_images=200, batch_size=64):
@@ -65,15 +105,8 @@ def predict_folder(model, folder_path, num_images=200, batch_size=64):
 
 
 if __name__ == "__main__":
-    model = load_keras_model(
-        r"D:\Projects\skin-age-detection\models\age_efficientnet_regression_stratified.h5"
-    )
-
-    test_image = r"C:\Users\Hi\Pictures\Camera Roll\WIN_20250920_20_30_10_Pro.jpg"
-    print("\n--- Testing on a single image ---")
+    # Example usage
+    model = load_model()
+    test_image = os.path.join(DATASETS_DIR, "UTKFace_resized", "WIN_20250920_20_30_10_Pro.jpg")
     age = predict_age(model, test_image)
-    if age is not None:
-        print(f"Predicted age: {age:.1f} years\n")
-
-    print("--- Running batch evaluation on folder ---")
-    predict_folder(model, r"D:\Projects\skin-age-detection\datasets\UTKFace_resized")
+    print(f"Predicted age: {age:.1f}")
