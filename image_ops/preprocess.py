@@ -53,20 +53,33 @@ def resize_with_pad(image_np, target_size=TARGET_SIZE):
     canvas[y_offset:y_offset+new_h, x_offset:x_offset+new_w] = resized
     return canvas
 
+
 def bytes_to_image(uploaded_bytes):
     """
-    Convert Streamlit uploaded bytes → cropped & resized face 224x224 image.
-    
-    Args:
-        uploaded_bytes (bytes): Streamlit uploaded image
-
-    Returns:
-        np.ndarray: Preprocessed face image (224x224x3, BGR)
+    Convert uploaded bytes → cropped & resized face (224x224 BGR).
+    Ensures stable 3-channel BGR output, converting from RGB/Grayscale/Alpha if needed.
     """
     arr = np.frombuffer(uploaded_bytes, np.uint8)
-    img_bgr = cv2.imdecode(arr, cv2.IMREAD_COLOR)
-    if img_bgr is None:
+    img = cv2.imdecode(arr, cv2.IMREAD_UNCHANGED)
+    if img is None:
         raise ValueError("Could not decode image bytes")
+
+    # Convert grayscale to BGR
+    if len(img.shape) == 2:
+        img_bgr = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
+    # Convert RGBA or BGRA to BGR
+    elif img.shape[2] == 4:
+        # Detect if it's RGBA or BGRA: OpenCV loads PNG as BGRA
+        img_bgr = cv2.cvtColor(img, cv2.COLOR_BGRA2BGR)
+    # Convert RGB to BGR (common if coming from PIL or some sources)
+    elif img.shape[2] == 3:
+        # Heuristic: check if most pixels are more "R than B" → likely RGB
+        if np.mean(img[:, :, 0]) > np.mean(img[:, :, 2]):
+            img_bgr = img[:, :, ::-1]  # RGB → BGR
+        else:
+            img_bgr = img.copy()
+    else:
+        raise ValueError(f"Unsupported image shape: {img.shape}")
 
     face = detect_and_crop_face(img_bgr)
     if face is None:
