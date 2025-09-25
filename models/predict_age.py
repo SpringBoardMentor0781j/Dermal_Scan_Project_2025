@@ -9,15 +9,15 @@ ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 MODELS_DIR = os.path.join(ROOT_DIR, "models")
 DATASETS_DIR = os.path.join(ROOT_DIR, "datasets")
 
-
 def load_model(model_path=None):
-    """Load a Keras model from a given path."""
+    """Load a Keras model from a given path (inference-only)."""
     if model_path is None:
         model_path = os.path.join(MODELS_DIR, "age_mobilenet_regression_stratified_old.h5")
     if not os.path.exists(model_path):
         raise FileNotFoundError(f"Model file not found: {model_path}")
-    model = tf.keras.models.load_model(model_path)
-    print(f"Model loaded from {model_path}")
+
+    model = tf.keras.models.load_model(model_path, compile=False)
+    print(f"Model loaded (inference-only) from {model_path}")
     return model
 
 
@@ -107,6 +107,6 @@ def predict_folder(model, folder_path, num_images=200, batch_size=64):
 if __name__ == "__main__":
     # Example usage
     model = load_model()
-    test_image = os.path.join(DATASETS_DIR, "UTKFace_resized", "WIN_20250920_20_30_10_Pro.jpg")
+    test_image = os.path.join(DATASETS_DIR, "UTKFace_resized", r"D:\Projects\skin-age-detection\datasets\UTKFace_resized\1_0_0_20161219140642920.jpg.chip.jpg")
     age = predict_age(model, test_image)
     print(f"Predicted age: {age:.1f}")
