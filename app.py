@@ -3,6 +3,7 @@ import os
 import streamlit as st
 import cv2
 import numpy as np
+from datetime import datetime
 
 from image_ops import loader, preprocess, label
 from models import predict_age, predict_feature
@@ -13,11 +14,17 @@ from models import predict_age, predict_feature
 ROOT_DIR = os.path.abspath(os.path.dirname(__file__))
 MODELS_DIR = os.path.join(ROOT_DIR, "models")
 CASCADE_DIR = os.path.join(ROOT_DIR, "image_ops")
+LOGS_DIR = os.path.join(ROOT_DIR, "logs")
 
 # Paths to files
 FEATURES_MODEL_PATH = os.path.join(MODELS_DIR, r"D:\Projects\skin-age-detection\models\efficientnet_b0_face_classifier_finetuned.h5")
 AGE_MODEL_PATH = os.path.join(MODELS_DIR, r"age_mobilenet_regression_stratified_old.h5")
 CASCADE_FILENAME = os.path.join(CASCADE_DIR, r"haarcascade_frontalface_default.xml")
+
+# ==============================
+# Ensure logs folder exists
+# ==============================
+os.makedirs(LOGS_DIR, exist_ok=True)
 
 # ==============================
 # Cache model + cascade
@@ -50,7 +57,7 @@ def main():
 
     img_bytes = uploaded_file.read()
 
-    # Full original image for display and labeling
+    # Decode original image
     full_image = cv2.imdecode(np.frombuffer(img_bytes, np.uint8), cv2.IMREAD_COLOR)
     if full_image is None:
         st.error("Could not decode image.")
@@ -62,9 +69,6 @@ def main():
     except Exception as e:
         st.error(f"Face preprocessing failed: {str(e)}")
         return
-
-    st.image(cv2.cvtColor(full_image, cv2.COLOR_BGR2RGB),
-             caption="Uploaded Image", use_column_width=True)
 
     with st.spinner("Predicting..."):
         try:
@@ -88,15 +92,16 @@ def main():
     for feat, prob in features.items():
         st.write(f"- {feat}: {prob*100:.1f}%")
 
+    # Show only the annotated image (proper RGB)
     st.image(cv2.cvtColor(annotated, cv2.COLOR_BGR2RGB),
-             caption="Annotated Output", use_column_width=True)
+             caption="Processed & Annotated Image", use_column_width=True)
 
     # ==============================
     # Downloads
     # ==============================
 
-    # Annotated image as PNG
-    success, img_encoded = cv2.imencode(".png", cv2.cvtColor(annotated, cv2.COLOR_BGR2RGB))
+    # Annotated image as PNG (no double conversion)
+    success, img_encoded = cv2.imencode(".png", annotated)
     if success:
         st.download_button(
             label="Download Annotated Image",
@@ -105,11 +110,19 @@ def main():
             mime="image/png"
         )
 
-    # Predictions CSV (raw string)
-    csv_header = "age," + ",".join(features.keys())
-    csv_values = [f"{age:.1f}"] + [f"{prob*100:.1f}%" for prob in features.values()]
+    # Predictions CSV
+    csv_header = "timestamp,age," + ",".join(features.keys())
+    csv_values = [datetime.now().isoformat(), f"{age:.1f}"] + [f"{prob*100:.1f}%" for prob in features.values()]
     csv_row = ",".join(csv_values)
     csv_text = csv_header + "\n" + csv_row
+
+    # Save logs in logs/YYYY-MM-DD.csv
+    log_filename = os.path.join(LOGS_DIR, f"predictions_{datetime.now().date()}.csv")
+    if not os.path.exists(log_filename):
+        with open(log_filename, "w") as f:
+            f.write(csv_header + "\n")
+    with open(log_filename, "a") as log_file:
+        log_file.write(csv_row + "\n")
 
     st.download_button(
         label="Download Predictions CSV",
