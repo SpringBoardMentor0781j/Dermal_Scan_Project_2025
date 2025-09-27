@@ -107,6 +107,8 @@ def predict_folder(model, folder_path, num_images=200, batch_size=64):
 if __name__ == "__main__":
     # Example usage
     model = load_model()
+        # Example using Keras
+    
     test_image = os.path.join(DATASETS_DIR, "UTKFace_resized", r"D:\Projects\skin-age-detection\datasets\UTKFace_resized\1_0_0_20161219140642920.jpg.chip.jpg")
     age = predict_age(model, test_image)
     print(f"Predicted age: {age:.1f}")

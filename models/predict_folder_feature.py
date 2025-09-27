@@ -9,7 +9,7 @@ DESIRED_CLASSES = ['clear_face', 'darkspots', 'puffy_eyes', 'wrinkles']
 # A tuple defining the target size (height, width) that the model expects for input images.
 IMG_SIZE = (224, 224)
 # ❗ IMPORTANT: Update this path to your trained model file.
-MODEL_PATH = r"D:\Projects\skin-age-detection\models\mobilenet_effnet_head.h5"
+MODEL_PATH = r"D:\Projects\skin-age-detection\models\efficientnet_b0_face_classifier_finetuned.h5"
 
 def load_model_safe(model_path):
     """

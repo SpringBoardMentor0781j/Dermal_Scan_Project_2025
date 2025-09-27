@@ -59,4 +59,4 @@ def predict_folder(folder_path, model_path="efficientnet_b0_face.h5"):
 # --- Example usage ---
 if __name__ == "__main__":
     remote_dir = r"D:\Projects\skin-age-detection\datasets\UTKFace_resized"
-    predict_folder(remote_dir, "D:\Projects\skin-age-detection\models\efficientnet_b0_face.h5")
+    predict_folder(remote_dir, r"D:\Projects\skin-age-detection\models\failed or less accurate attempts\efficientnet_b0_face.h5")
