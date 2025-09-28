@@ -94,7 +94,7 @@ def main():
 
     # Show only the annotated image (proper RGB)
     st.image(cv2.cvtColor(annotated, cv2.COLOR_BGR2RGB),
-             caption="Processed & Annotated Image", use_column_width=True)
+             caption="Processed & Annotated Image", use_container_width=True)
 
     # ==============================
     # Downloads

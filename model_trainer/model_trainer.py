@@ -34,7 +34,7 @@ IMG_SIZE = (224, 224)
 BATCH_SIZE = 16
 VAL_SPLIT = 0.2
 INITIAL_EPOCHS = 10
-FINETUNE_EPOCHS = 15
+FINETUNE_EPOCHS = 10
 
 
 # ==============================================================================
