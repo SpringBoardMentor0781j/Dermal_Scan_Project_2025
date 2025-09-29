@@ -40,15 +40,15 @@ def load_models_and_cascade():
 # Streamlit App
 # ==============================
 def main():
-    st.set_page_config(page_title="Face Age & Feature Prediction", layout="wide")
-    st.title("Facial Dermal Scan")
+    st.set_page_config(page_title="DermalScan: Face Age & Feature Prediction", layout="wide")
+    st.title("DermalScan")
 
     with st.spinner("Loading models..."):
         face_cascade, age_model, feature_model = load_models_and_cascade()
 
     st.markdown(
-        "Upload an image. Avoid accessories (glasses, earrings) "
-        "and do not smile for best results."
+        "Upload an image. *Avoid accessories* (glasses, earrings) "
+        "and **do not** smile for best results."
     )
 
     uploaded_file = st.file_uploader("Upload an image", type=["jpg", "jpeg", "png"])
