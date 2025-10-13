@@ -47,9 +47,9 @@ BATCH_SIZE = 16
 # TRAIN_VAL_SPLIT: The proportion of the dataset to be used for training (80%). The rest (20%) will be for validation.
 TRAIN_VAL_SPLIT = 0.8
 # EPOCHS_HEAD: The number of training epochs for the first stage, where we only train the new top layers of the model.
-EPOCHS_HEAD = 40
+EPOCHS_HEAD = 20
 # EPOCHS_FINE: The number of training epochs for the second stage, where we fine-tune the entire model with a lower learning rate.
-EPOCHS_FINE = 30
+EPOCHS_FINE = 20
 
 
 # ===============================
