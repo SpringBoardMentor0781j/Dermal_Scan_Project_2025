@@ -610,7 +610,7 @@ def show_dashboard():
         if not log_df.empty:
             st.info(f"📊 Showing your last {min(5, len(log_df))} analyses")
             
-            for index, row in log_df.tail(5).iloc[::-1].iterrows():
+            for index, row in log_df.iloc[::-1].iterrows():
                 timestamp = pd.to_datetime(row['timestamp']).strftime('%Y-%m-%d %H:%M:%S')
                 
                 with st.expander(
