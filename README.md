@@ -1,1 +1,13 @@
-Dermal Scan Project is a AI Facial Skin Aging Detection Application. Using this application we will be able to classify if the given image has wrinkles, puffy eyes, acne or none. It will also be to predict the age of the person in the image.
+**Face Analysis Project**
+
+This repository contains a Streamlit-based application for face analysis. It predicts age and skin-related attributes from an uploaded image using pre-trained deep learning models.
+
+**Features**
+
+Upload an image through a simple web interface
+
+Predict age using a deep learning model
+
+Predict skin-related attributes using another model
+
+Lightweight, easy-to-deploy Streamlit app
