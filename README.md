@@ -1,0 +1,1 @@
+Dermal Scan Project is a AI Facial Skin Aging Detection Application. Using this application we will be able to classify if the given image has wrinkles, puffy eyes, acne or none. It will also be to predict the age of the person in the image.
