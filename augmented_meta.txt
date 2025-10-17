@@ -1,0 +1,16 @@
+{
+    "total_images": 21510,
+    "num_classes": 6,
+    "image_size": [
+        224,
+        224
+    ],
+    "classes": [
+        "acne",
+        "clear_face",
+        "dark_spots",
+        "puffy_eyes",
+        "scars",
+        "wrinkles"
+    ]
+}
