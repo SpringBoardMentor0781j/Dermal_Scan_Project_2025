@@ -1,0 +1,119 @@
+
+        /* Hide Streamlit's default elements */
+        #MainMenu {visibility: hidden;}
+        footer {visibility: hidden;}
+        header {visibility: hidden;}
+
+        /* --- Animated Gradient Background --- */
+        @keyframes gradient {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        .stApp {
+            background: linear-gradient(-45deg, #10002b, #240046, #3c096c);
+            background-size: 400% 400%;
+            animation: gradient 20s ease infinite;
+        }
+
+        /* --- Card Styling with Rise Effect --- */
+        .interactive-card {
+            padding: 2rem;
+            border-radius: 20px;
+            background: rgba(255, 255, 255, 0.95);
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            margin-bottom: 1.5rem;
+        }
+
+        .interactive-card:hover {
+            transform: translateY(-15px) scale(1.02);
+            box-shadow: 0 25px 60px rgba(0, 0, 0, 0.4);
+        }
+
+        /* --- Button Styling --- */
+        .stButton>button {
+            border-radius: 25px;
+            border: none;
+            background: linear-gradient(135deg, #7b2cbf 0%, #9d4edd 100%);
+            color: white;
+            transition: all 0.3s ease;
+            padding: 14px 32px;
+            box-shadow: 0 6px 20px rgba(123, 44, 191, 0.4);
+            font-weight: 600;
+            letter-spacing: 0.5px;
+        }
+
+        .stButton>button:hover {
+            transform: translateY(-3px) scale(1.2);
+            box-shadow: 0 10px 30px rgba(157, 78, 221, 0.6);
+            background: linear-gradient(135deg, #9d4edd 0%, #7b2cbf 100%);
+        }
+
+        .stButton>button:active {
+            transform: translateY(-1px);
+        }
+
+        /* --- Progress Bar Styling --- */
+        .stProgress > div > div > div > div {
+            background: linear-gradient(90deg, #7b2cbf 0%, #c77dff 100%);
+            border-radius: 10px;
+        }
+
+        /* --- Metric Styling --- */
+        [data-testid="stMetricValue"] {
+            font-size: 2.5rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, #c77dff 0%, #e0aaff 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        /* --- Text Input Styling --- */
+        .stTextInput>div>div>input {
+            border-radius: 15px;
+            border: 2px solid rgba(90, 24, 154, 0.4);
+            padding: 12px 16px;
+            transition: all 0.3s ease;
+        }
+
+        .stTextInput>div>div>input:focus {
+            border-color: #7b2cbf;
+            box-shadow: 0 0 15px rgba(123, 44, 191, 0.3);
+        }
+
+        /* --- File Uploader Styling --- */
+        [data-testid="stFileUploader"] {
+            border-radius: 20px;
+            border: 3px dashed rgba(123, 44, 191, 0.5);
+            padding: 2rem;
+            transition: all 0.3s ease;
+        }
+
+        [data-testid="stFileUploader"]:hover {
+            border-color: #9d4edd;
+            background: rgba(157, 78, 221, 0.05);
+        }
+
+        /* --- Info Box Styling --- */
+        .stAlert {
+            border-radius: 15px;
+            border-left: 5px solid #7b2cbf;
+        }
+
+        /* --- Expander Styling --- */
+        .streamlit-expanderHeader {
+            border-radius: 15px;
+            background: rgba(255, 255, 255, 0.1);
+            transition: all 0.3s ease;
+        }
+
+        .streamlit-expanderHeader:hover {
+            background: rgba(123, 44, 191, 0.2);
+            transform: translateX(5px);
+        }
+   
