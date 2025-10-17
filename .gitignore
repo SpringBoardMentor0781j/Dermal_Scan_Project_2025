@@ -1,0 +1,46 @@
+# ---------------------------
+# Python & Streamlit Project Ignore File
+# ---------------------------
+
+# Byte-compiled / cache files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+venv/
+dermal_env/
+.env/
+*.env
+
+# Model and weight files (large binaries)
+*.h5
+*.caffemodel
+*.pb
+*.tflite
+
+# Output and results
+output/
+*.csv
+*.zip
+*.jpg
+*.png
+
+# Streamlit logs and temp
+.streamlit/
+logs/
+*.log
+
+# Jupyter / IDE specific
+.ipynb_checkpoints/
+.vscode/
+.idea/
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+
+# Misc
+*.bak
+*.swp
+*.tmp
