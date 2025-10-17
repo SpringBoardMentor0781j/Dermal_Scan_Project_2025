@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DermalScan - AI Skin Analysis</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>DermalScan</h1>
+            <p>AI-Powered Facial Skin Aging Classifier and Age/Gender Predictor</p>
+        </header>
+        
+        <div class="instructions">
+            <h2>How to Use:</h2>
+            <ol>
+                <li>Click the "Choose File" button to select an image from your device.</li>
+                <li>Ensure the image is in .jpg, .jpeg, or .png format.</li>
+                <li>The face should be clearly visible and well-lit for best results.</li>
+                <li>Click "Analyze Image" and wait for the results.</li>
+            </ol>
+        </div>
+
+        <div class="upload-section">
+            <form action="/" method="post" enctype="multipart/form-data">
+                <input type="file" name="file" id="file" class="file-input" required>
+                <label for="file" class="file-label">Choose an Image</label>
+                <button type="submit" class="analyze-btn" id="analyze-btn" disabled>Analyze Image</button>
+                <div id="upload-status"></div>
+            </form>
+        </div>
+        
+        <footer>
+            <p>Developed with Flask and TensorFlow</p>
+        </footer>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const fileInput = document.getElementById('file');
+            const analyzeBtn = document.getElementById('analyze-btn');
+            const uploadStatus = document.getElementById('upload-status');
+
+            fileInput.addEventListener('change', function() {
+                if (fileInput.files.length > 0) {
+                    // An image has been selected
+                    uploadStatus.textContent = 'Image Uploaded: ' + fileInput.files[0].name;
+                    analyzeBtn.disabled = false; // Enable the button
+                } else {
+                    // No image selected
+                    uploadStatus.textContent = '';
+                    analyzeBtn.disabled = true; // Keep button disabled
+                }
+            });
+        });
+    </script>
+</body>
+</html>
