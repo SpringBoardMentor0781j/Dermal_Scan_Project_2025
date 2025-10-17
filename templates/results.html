@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DermalScan - Analysis Results</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Analysis Results</h1>
+        </header>
+
+        {% if error %}
+            <div class="error-message">
+                <p>{{ error }}</p>
+                <a href="/" class="back-btn">Try Again</a>
+            </div>
+        {% else %}
+            <div class="results-grid">
+                <div class="image-display">
+                    <h3>Original Image</h3>
+                    <img src="{{ url_for('uploaded_file', filename=original_image) }}" alt="Original Image">
+                </div>
+                <div class="image-display">
+                    <h3>Annotated Image</h3>
+                    <img src="{{ url_for('uploaded_file', filename=annotated_image) }}" alt="Annotated Image">
+                </div>
+            </div>
+
+            <div class="analysis-section">
+                <h2>Prediction Details</h2>
+                <div class="prediction-box">
+                    <p class="analysis-message">{{ analysis_message }}</p>
+                    <div class="scores">
+                        <h3>Aging Sign Confidence Scores:</h3>
+                        <ul>
+                            {% for sign, score in predictions.items() %}
+                                <li><strong>{{ sign.replace('_', ' ').title() }}:</strong> {{ "%.2f"|format(score*100) }}%</li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                    <div class="demographics">
+                        <h3>Demographic Prediction:</h3>
+                        <p><strong>Predicted Age:</strong> {{ age }} years</p>
+                        <p><strong>Predicted Gender:</strong> {{ gender }}</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="download-section">
+                <a href="{{ url_for('uploaded_file', filename=annotated_image) }}" download class="download-btn">Download Annotated Image</a>
+                <a href="{{ url_for('uploaded_file', filename=csv_file) }}" download class="download-btn">Download Predictions (CSV)</a>
+            </div>
+        {% endif %}
+        
+        <div class="back-link">
+             <a href="/" class="back-btn">Analyze Another Image</a>
+        </div>
+
+        <footer>
+            <p>DermalScan - AI Skin Analysis</p>
+        </footer>
+    </div>
+</body>
+</html>
