@@ -1,4 +1,19 @@
-streamlit
-tensorflow==2.17.0
-pillow
-numpy
+# Python Version
+python==3.10
+
+# Core
+numpy>=1.23.0
+pandas>=1.5.0
+
+# Machine Learning / Deep Learning
+tensorflow>=2.10.0
+scikit-learn>=1.2.0
+
+# Computer Vision
+opencv-python>=4.7.0
+
+# Web UI
+streamlit>=1.24.0
+
+# Visualization
+matplotlib>=3.7.0
