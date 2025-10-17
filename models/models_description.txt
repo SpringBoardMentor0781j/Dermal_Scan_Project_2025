@@ -1,0 +1,17 @@
+Models for DermalScan Project
+=============================
+
+This directory contains the pre-trained models required to run the DermalScan application.
+
+1.  **age_gender_model.h5**
+    -   **Purpose:** A custom-trained Convolutional Neural Network (CNN) for age and gender prediction.
+    -   **Dataset:** Trained on the UTKFace dataset.
+
+2.  **fine_tuned_densenet_classifier.h5**
+    -   **Purpose:** A fine-tuned DenseNet121 model used for classifying aging signs (dark spots, puffy eyes, wrinkles, clear face).
+    -   **Dataset:** Trained on a custom dataset of facial images.
+
+3.  **haarcascade_frontalface_default.xml**
+    -   **Purpose:** The pre-trained Haar Cascade classifier from OpenCV used for face detection.
+
+Ensure these files are present in the /models/ directory for the application to function correctly.
