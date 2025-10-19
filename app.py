@@ -1,156 +1,141 @@
 import streamlit as st
-import tensorflow as tf
-import numpy as np
-import os
-import dlib
 import cv2
+import numpy as np
+import tensorflow as tf
 from PIL import Image
-import requests
+import datetime
+import os
+import csv
 
-# --- Page Configuration ---
-st.set_page_config(
-    page_title="Facial Analysis AI",
-    page_icon="🤖",
-    layout="wide"
-)
+# --- MODEL-SPECIFIC PREPROCESSORS ---
+from tensorflow.keras.applications.resnet_v2 import preprocess_input as preprocess_input_skin
+from tensorflow.keras.applications.mobilenet_v2 import preprocess_input as preprocess_input_age
 
-# --- Helper File Downloader ---
-def download_file(url, output_path):
-    """Downloads a file from a URL if it doesn't exist."""
-    if not os.path.exists(output_path):
-        st.info(f"Downloading helper file: {output_path}...")
-        r = requests.get(url, stream=True)
-        with open(output_path, 'wb') as f:
-            f.write(r.content)
-        st.success(f"Downloaded {output_path}")
+# --- CONFIGURATION ---
+SKIN_CLASS_NAMES = ['clear face', 'darkspots', 'puffy eyes', 'wrinkles']
+LOG_FILE = 'prediction_log.csv'
 
-# --- Caching the Models (Load only once) ---
+# --- MODEL LOADING ---
 @st.cache_resource
-def load_all_models_and_predictors(skin_model_path, age_model_path):
-    """Loads all necessary models and detectors, decorated with Streamlit's caching."""
-    # Download helper files for detectors
-    download_file('https://github.com/opencv/opencv/raw/master/samples/dnn/face_detector/deploy.prototxt', 'deploy.prototxt')
-    download_file('https://raw.githubusercontent.com/opencv/opencv_3rdparty/dnn_samples_face_detector_20180205_fp16/res10_300x300_ssd_iter_140000_fp16.caffemodel', 'res10_300x300_ssd_iter_140000_fp16.caffemodel')
-    download_file('http://dlib.net/files/shape_predictor_68_face_landmarks.dat.bz2', 'shape_predictor_68_face_landmarks.dat.bz2')
+def load_models():
+    """Load all AI models and the face detector from disk."""
+    try:
+        skin_model = tf.keras.models.load_model('dermal_scan_model_best.h5')
+        # --- CHANGE 1: Load the correct 'fast' age model file ---
+        age_model = tf.keras.models.load_model('age_prediction_model_fast.h5')
+        # --- END CHANGE 1 ---
+        face_cascade = cv2.CascadeClassifier('haarcascade_frontalface_default.xml')
+        return skin_model, age_model, face_cascade
+    except Exception as e:
+        st.error(f"Error loading models: {e}. Please ensure all model files are in the same folder as app.py.")
+        return None, None, None
+
+skin_model, age_model, face_cascade = load_models()
+
+# --- LOGGING FUNCTION ---
+def log_prediction(filename, box, skin_class, skin_conf, age):
+    """Saves prediction details to a CSV file."""
+    if not os.path.exists(LOG_FILE):
+        with open(LOG_FILE, 'w', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerow(['timestamp', 'filename', 'box_x', 'box_y', 'box_w', 'box_h', 'predicted_skin_condition', 'skin_confidence', 'predicted_age'])
     
-    # Extract dlib model if not present
-    predictor_path = 'shape_predictor_68_face_landmarks.dat'
-    if not os.path.exists(predictor_path):
-        import bz2
-        with bz2.BZ2File('shape_predictor_68_face_landmarks.dat.bz2', 'rb') as f_in, open(predictor_path, 'wb') as f_out:
-            f_out.write(f_in.read())
+    with open(LOG_FILE, 'a', newline='') as f:
+        writer = csv.writer(f)
+        timestamp = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        x, y, w, h = box
+        writer.writerow([timestamp, filename, x, y, w, h, skin_class, f"{skin_conf:.2f}%", age])
 
-    # Load models
-    face_net = cv2.dnn.readNetFromCaffe('deploy.prototxt', 'res10_300x300_ssd_iter_140000_fp16.caffemodel')
-    landmark_predictor = dlib.shape_predictor('shape_predictor_68_face_landmarks.dat')
-    skin_model = tf.keras.models.load_model(skin_model_path, compile=False)
-    age_model = tf.keras.models.load_model(age_model_path, compile=False)
+# --- MODULARIZED INFERENCE PIPELINE ---
+def run_analysis(image_cv, filename):
+    """Takes an image, performs the full analysis, and returns the annotated image."""
+    annotated_image = image_cv.copy()
+    gray_image = cv2.cvtColor(annotated_image, cv2.COLOR_BGR2GRAY)
+    faces = face_cascade.detectMultiScale(gray_image, scaleFactor=1.1, minNeighbors=5, minSize=(40, 40))
+
+    if len(faces) == 0:
+        st.warning("No faces were detected in the uploaded image.")
+        return image_cv
+
+    st.success(f"Detected {len(faces)} face(s). Processing...")
     
-    return face_net, landmark_predictor, skin_model, age_model
+    for face_box in faces:
+        x, y, w, h = face_box
+        face_roi = annotated_image[y:y+h, x:x+w]
+        
+        # Preprocess for Skin Model (requires 224x224)
+        resized_skin = cv2.resize(face_roi, (224, 224))
+        img_skin = np.expand_dims(np.array(resized_skin, dtype='float32'), axis=0)
+        preprocessed_skin = preprocess_input_skin(img_skin)
+        
+        # --- CHANGE 2: Preprocess for the FAST Age Model (requires 128x128) ---
+        resized_age = cv2.resize(face_roi, (128, 128))
+        # --- END CHANGE 2 ---
+        img_age = np.expand_dims(np.array(resized_age, dtype='float32'), axis=0)
+        preprocessed_age = preprocess_input_age(img_age)
 
-# --- The Backend Pipeline Function ---
-def run_full_pipeline(image, face_net, landmark_predictor, skin_model, age_model):
-    skin_class_names = ['clear face', 'dark spots', 'puffy eyes', 'wrinkles']
-    IMG_SIZE = 224
+        # Make predictions
+        skin_predictions = skin_model.predict(preprocessed_skin)[0]
+        skin_class_index = np.argmax(skin_predictions)
+        skin_class_name = SKIN_CLASS_NAMES[skin_class_index]
+        skin_confidence = skin_predictions[skin_class_index] * 100
+        
+        age_prediction = age_model.predict(preprocessed_age)[0][0]
+        predicted_age = int(age_prediction)
+        
+        log_prediction(filename, face_box, skin_class_name, skin_confidence, predicted_age)
 
-    output_image = image.copy()
-    (h, w) = image.shape[:2]
+        # Draw annotations
+        cv2.rectangle(annotated_image, (x, y), (x+w, y+h), (36, 255, 12), 2)
+        skin_text = f"{skin_class_name}: {skin_confidence:.1f}%"
+        age_text = f"Predicted Age: ~{predicted_age}"
+        cv2.putText(annotated_image, skin_text, (x, y - 35), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (36, 255, 12), 2)
+        cv2.putText(annotated_image, age_text, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (36, 255, 12), 2)
+        
+    return annotated_image
 
-    # Face detection
-    blob = cv2.dnn.blobFromImage(cv2.resize(image, (300, 300)), 1.0, (300, 300), (104.0, 177.0, 123.0))
-    face_net.setInput(blob)
-    detections = face_net.forward()
-    best_detection_index = np.argmax(detections[0, 0, :, 2])
-    confidence = detections[0, 0, best_detection_index, 2]
+# --- WEB UI ---
+st.set_page_config(layout="wide", page_title="AI DermalScan")
+st.title("🔬 AI DermalScan: Facial Skin & Age Analysis")
+st.write("This application uses deep learning to analyze facial images for skin conditions and predict age. Upload an image to begin.")
 
-    if confidence < 0.5:
-        return image, {"error": "No face detected."}
-
-    # Predictions
-    box = detections[0, 0, best_detection_index, 3:7] * np.array([w, h, w, h])
-    (startX, startY, endX, endY) = box.astype("int")
-    cropped_face = image[startY:endY, startX:endX]
-    
-    if cropped_face.size == 0:
-        return image, {"error": "Face crop failed."}
-
-    resized_face = tf.image.resize(cropped_face, [IMG_SIZE, IMG_SIZE])
-    img_batch = np.expand_dims(resized_face, axis=0)
-    preprocessed_img = tf.keras.applications.resnet_v2.preprocess_input(np.copy(img_batch))
-    
-    skin_probs = skin_model.predict(preprocessed_img)
-    skin_class = skin_class_names[np.argmax(skin_probs[0])]
-    skin_conf = np.max(skin_probs[0]) * 100
-    
-    age_pred = age_model.predict(preprocessed_img)[0][0]
-    age_pred = max(0, age_pred)
-    age_range_start = int(age_pred // 10) * 10
-    age_range = f"{age_range_start}-{age_range_start + 10}"
-
-    # Visualization
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    face_rect = dlib.rectangle(int(startX), int(startY), int(endX), int(endY))
-    landmarks = landmark_predictor(gray, face_rect)
-    
-    if skin_class == 'puffy eyes' or skin_class == 'wrinkles':
-        left_eye_pts = np.array([(landmarks.part(i).x, landmarks.part(i).y) for i in range(36, 42)])
-        right_eye_pts = np.array([(landmarks.part(i).x, landmarks.part(i).y) for i in range(42, 48)])
-        cv2.rectangle(output_image, cv2.boundingRect(left_eye_pts), (0, 255, 255), 2)
-        cv2.rectangle(output_image, cv2.boundingRect(right_eye_pts), (0, 255, 255), 2)
-    
-    cv2.rectangle(output_image, (startX, startY), (endX, endY), (0, 255, 0), 2)
-
-    # Return the annotated image and a dictionary of results
-    results = {
-        "skin_class": skin_class,
-        "skin_conf": skin_conf,
-        "age_pred": age_pred,
-        "age_range": age_range
-    }
-    return output_image, results
-
-# --- Streamlit UI ---
-
-st.title("🤖 AI Facial Analysis")
-st.markdown("Upload an image to detect a face and predict skin condition and age.")
-
-# Define model paths
-SKIN_MODEL_PATH = 'model_skin.h5'
-AGE_MODEL_PATH = 'age_resnet_simple_model_best_epoch5.h5'
-
-# Load models with caching
-try:
-    face_net, landmark_predictor, skin_model, age_model = load_all_models_and_predictors(SKIN_MODEL_PATH, AGE_MODEL_PATH)
-except Exception as e:
-    st.error(f"Error loading models: {e}")
-    st.stop()
-
-
-# Image Uploader
-uploaded_file = st.file_uploader("Choose an image...", type=["jpg", "jpeg", "png"])
+uploaded_file = st.file_uploader("Choose a facial image...", type=["jpg", "jpeg", "png"])
 
 if uploaded_file is not None:
-    # Convert the uploaded file to an OpenCV image
-    file_bytes = np.asarray(bytearray(uploaded_file.read()), dtype=np.uint8)
-    image = cv2.imdecode(file_bytes, 1)
+    image = Image.open(uploaded_file).convert('RGB')
+    image_cv = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
+
+    st.image(image, caption='Uploaded Image', use_column_width=True)
     
-    # Display the uploaded image
-    st.image(image, channels="BGR", caption="Uploaded Image", use_column_width=True)
-    
-    if st.button("Analyze Face"):
-        with st.spinner("Analyzing... This may take a moment."):
-            # Run the full pipeline
-            annotated_image, results = run_full_pipeline(image, face_net, landmark_predictor, skin_model, age_model)
-            
-            # Display results
-            st.image(annotated_image, channels="BGR", caption="Analysis Result", use_column_width=True)
-            
-            st.subheader("Analysis Results")
-            if "error" in results:
-                st.error(results["error"])
-            else:
+    if st.button('Analyze Image', type="primary"):
+        if skin_model is not None and age_model is not None and face_cascade is not None:
+            with st.spinner('Performing analysis... Please wait.'):
+                annotated_image = run_analysis(image_cv, uploaded_file.name)
+                annotated_image_rgb = cv2.cvtColor(annotated_image, cv2.COLOR_BGR2RGB)
+                
+                st.write("---")
+                st.subheader("Analysis Results")
+                st.image(annotated_image_rgb, caption='Processed Image with Predictions', use_column_width=True)
+                
+                _, buffer = cv2.imencode('.jpg', annotated_image)
+                image_bytes = buffer.tobytes()
+
                 col1, col2 = st.columns(2)
                 with col1:
-                    st.metric(label="Predicted Age", value=f"{results['age_pred']:.1f}", delta=f"{results['age_range']} range")
-                with col2:
-                    st.metric(label="Predicted Skin Condition", value=results['skin_class'], delta=f"{results['skin_conf']:.1f}% confidence")
+                    st.download_button(
+                        label="📥 Download Annotated Image",
+                        data=image_bytes,
+                        file_name=f"result_{uploaded_file.name}",
+                        mime="image/jpeg"
+                    )
+                if os.path.exists(LOG_FILE):
+                    with col2:
+                        with open(LOG_FILE, "r") as f:
+                            st.download_button(
+                                label="📋 Download Prediction Log (CSV)",
+                                data=f.read(),
+                                file_name="prediction_log.csv",
+                                mime="text/csv"
+                            )
+else:
+    st.info('Please upload an image to get started.')
