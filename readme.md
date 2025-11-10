@@ -1,4 +1,4 @@
-<!-- Copilot: Write a professional README for "AI DermalScan: Facial Skin Aging Detection App" -->
+
 # AI DermalScan 👩‍⚕️  
 An AI-powered web application that detects facial skin aging signs such as wrinkles, dark spots, and puffy eyes using EfficientNetB0 and OpenCV.
 
